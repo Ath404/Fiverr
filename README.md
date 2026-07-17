@@ -1,5 +1,7 @@
 # AURUM — Provably-Fair Virtual Casino & Sportsbook
 
+> **Demo prototype for halkeb — designed & built by atharvskills.**
+
 A working prototype of a virtual-currency casino platform with an **in-house,
 provably-fair RNG**, an **in-house betting engine** for casino and sports, a
 **multi-tier agent/affiliate system**, and an **admin fairness console**.
@@ -41,11 +43,27 @@ mines layout   = Fisher–Yates shuffle seeded by the digest
 
 ---
 
+## Playable games
+
+Four provably-fair originals are fully playable in the demo — **Dice**, **Crash**,
+**Mines**, and **Plinko** (12-row canvas drop with Low/Medium/High risk tables).
+Every result is derived from the seed/nonce and can be recomputed in the admin
+verifier.
+
 ## Run it
 
 ### 1. The demo (no build step)
-Open `frontend/index.html` in any browser — it is fully self-contained and
-demonstrates every screen (Casino, Live, Sportsbook, Affiliate, Admin).
+Open `index.html` (repo root) or `frontend/index.html` in any browser — it is
+fully self-contained and demonstrates every screen (Casino, Live, Sportsbook,
+Affiliate, Admin).
+
+### Deploy a live link
+The repo root contains a static `index.html`, so it deploys with zero config:
+
+- **Vercel** — import this repo at [vercel.com/new](https://vercel.com/new); name
+  the project `atharvskills` to get `https://atharvskills.vercel.app`.
+- **GitHub Pages** — Settings → Pages → deploy from `main` / root → served at
+  `https://ath404.github.io/<repo>/`.
 
 ### 2. The backend + API
 ```bash

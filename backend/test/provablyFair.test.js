@@ -60,6 +60,17 @@ test('mines layout places the exact number of unique mines', () => {
   assert.ok(layout.every((i) => i >= 0 && i < 25));
 });
 
+test('plinko path is deterministic, bounded, and bucket = right-moves', () => {
+  const s = pf.randomSeed(), c = 'plinko';
+  const a = pf.plinkoPath(s, c, 7, 12);
+  const b = pf.plinkoPath(s, c, 7, 12);
+  assert.deepEqual(a, b);
+  assert.equal(a.path.length, 12);
+  assert.ok(a.path.every((x) => x === 0 || x === 1));
+  assert.equal(a.bucket, a.path.reduce((x, y) => x + y, 0));
+  assert.ok(a.bucket >= 0 && a.bucket <= 12);
+});
+
 test('verify() recomputes a historical dice bet exactly', () => {
   const serverSeed = pf.randomSeed();
   const clientSeed = 'player-chosen';

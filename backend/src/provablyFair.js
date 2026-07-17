@@ -113,6 +113,20 @@ function minesLayout(serverSeed, clientSeed, nonce, size = 25, mineCount = 3) {
 }
 
 /**
+ * PLINKO — derive the ball's left/right decision at each of `rows` pegs from
+ * the provably-fair digest. The final bucket is the number of right-moves,
+ * which indexes into the operator's payout table.
+ */
+function plinkoPath(serverSeed, clientSeed, nonce, rows = 12) {
+  const digest = hmacDigest(serverSeed, clientSeed, nonce);
+  const path = [];
+  for (let i = 0; i < rows; i++) {
+    path.push(parseInt(digest[i], 16) % 2); // 0 = left, 1 = right
+  }
+  return { path, bucket: path.reduce((a, b) => a + b, 0) };
+}
+
+/**
  * Verify any historical bet. Given the (now-revealed) server seed, confirms
  * the published hash matches and recomputes the outcome for the given game.
  * This is exactly what a player runs to audit the casino.
@@ -130,6 +144,9 @@ function verify({ serverSeed, serverSeedHash, clientSeed, nonce, game, params = 
     case 'mines':
       outcome = minesLayout(serverSeed, clientSeed, nonce, params.size, params.mineCount);
       break;
+    case 'plinko':
+      outcome = plinkoPath(serverSeed, clientSeed, nonce, params.rows);
+      break;
     default:
       outcome = betFloat(serverSeed, clientSeed, nonce);
   }
@@ -145,5 +162,6 @@ module.exports = {
   diceRoll,
   crashPoint,
   minesLayout,
+  plinkoPath,
   verify,
 };
