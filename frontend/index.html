@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURUM — Provably-Fair Virtual Casino</title>
+<meta name="description" content="Provably-fair virtual-currency casino & sportsbook prototype — HMAC-SHA256 RNG, live betting engine, multi-tier affiliate admin.">
+</head>
+<body>
+<style>
+  :root {
+    color-scheme: dark;
+    --felt:        #071009;
+    --bg:          #0a1310;
+    --surface:     #122019;
+    --surface-2:   #172a20;
+    --line:        #24382c;
+    --line-soft:   #1b2c22;
+    --brass:       #d4b876;
+    --brass-dim:   #a98f52;
+    --cream:       #f2ede1;
+    --muted:       #8fa396;
+    --muted-2:     #63756a;
+    --win:         #4ade80;
+    --loss:        #f8715a;
+    --live:        #e5484d;
+    --radius:      14px;
+    --radius-sm:   9px;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --shadow: 0 18px 50px -20px rgba(0,0,0,.7);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 78% -10%, rgba(212,184,118,.08), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(74,222,128,.05), transparent 55%),
+      var(--bg);
+    color: var(--cream);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+  ::selection { background: rgba(212,184,118,.3); }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+  h1,h2,h3 { text-wrap: balance; margin: 0; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- App shell ---------- */
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .rail {
+    border-right: 1px solid var(--line-soft);
+    background: linear-gradient(180deg, rgba(23,42,32,.5), rgba(10,19,16,.2));
+    padding: 22px 16px;
+    display: flex; flex-direction: column; gap: 26px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 0 6px; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 10px; flex: none;
+    background: linear-gradient(145deg, var(--brass), var(--brass-dim));
+    display: grid; place-items: center;
+    font-family: var(--serif); font-weight: 700; font-size: 22px; color: #1c1608;
+    box-shadow: 0 6px 18px -6px rgba(212,184,118,.6), inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .brand-name { font-family: var(--serif); font-size: 21px; letter-spacing: .06em; font-weight: 700; }
+  .brand-sub { font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--brass-dim); margin-top: 1px; }
+
+  .nav { display: flex; flex-direction: column; gap: 3px; }
+  .nav-label { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted-2); padding: 0 10px 8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    color: var(--muted); font-size: 14px; font-weight: 500;
+    border: 1px solid transparent; transition: .16s;
+  }
+  .nav-item:hover { background: var(--surface); color: var(--cream); }
+  .nav-item.active { background: var(--surface-2); color: var(--cream); border-color: var(--line); }
+  .nav-item.active .ni-ico { color: var(--brass); }
+  .ni-ico { width: 18px; text-align: center; color: var(--muted-2); font-size: 15px; }
+  .nav-item .badge-live {
+    margin-left: auto; font-size: 9px; letter-spacing: .1em; font-weight: 700;
+    color: var(--live); display: inline-flex; align-items: center; gap: 4px;
+  }
+  .dot-live { width: 6px; height: 6px; border-radius: 50%; background: var(--live); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(229,72,77,.5);} 50% { opacity:.55; box-shadow: 0 0 0 5px rgba(229,72,77,0);} }
+
+  .rail-foot { margin-top: auto; font-size: 11px; color: var(--muted-2); padding: 0 6px; line-height: 1.6; }
+  .rail-foot b { color: var(--brass-dim); font-weight: 600; }
+
+  /* ---------- Top bar ---------- */
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; gap: 18px;
+    padding: 16px 28px; border-bottom: 1px solid var(--line-soft);
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(10,19,16,.82); backdrop-filter: blur(14px);
+  }
+  .view-title { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+  .view-title small { display:block; color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
+  .topbar-spacer { flex: 1; }
+  .wallet {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 8px 8px 8px 15px; border-radius: 999px;
+  }
+  .wallet-label { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .wallet-amt { font-size: 17px; font-weight: 600; color: var(--brass); }
+  .wallet-cur { font-size: 11px; color: var(--muted); margin-left: 2px; }
+  .btn-deposit {
+    background: linear-gradient(145deg, var(--brass), var(--brass-dim));
+    color: #1c1608; font-weight: 700; font-size: 13px;
+    border: none; padding: 8px 15px; border-radius: 999px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    background: conic-gradient(from 200deg, var(--brass), var(--surface-2), var(--brass-dim));
+    display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #1c1608;
+    border: 1px solid var(--line);
+  }
+
+  .content { padding: 28px; max-width: 1180px; width: 100%; }
+  .view { display: none; animation: fade .35s ease; }
+  .view.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity:1; transform:none; } }
+
+  /* ---------- Generic bits ---------- */
+  .section-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 16px; }
+  .section-head h2 { font-family: var(--serif); font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+  .section-head p { color: var(--muted); font-size: 13px; margin: 0; }
+  .pill {
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
+    padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--brass-dim); background: var(--surface);
+  }
+  .pill.win { color: var(--win); border-color: rgba(74,222,128,.3); background: rgba(74,222,128,.08); }
+  .pill.loss { color: var(--loss); border-color: rgba(248,113,90,.3); background: rgba(248,113,90,.08); }
+  .card {
+    background: linear-gradient(180deg, var(--surface), rgba(18,32,25,.6));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  /* ---------- Casino lobby ---------- */
+  .hero {
+    position: relative; overflow: hidden;
+    border-radius: 18px; border: 1px solid var(--line);
+    background:
+      radial-gradient(700px 300px at 85% 20%, rgba(212,184,118,.14), transparent 60%),
+      linear-gradient(120deg, #0e1c15, #16281e);
+    padding: 34px 34px; margin-bottom: 26px;
+    display: flex; align-items: center; gap: 28px;
+  }
+  .hero-copy { max-width: 460px; }
+  .hero .eyebrow { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--brass); margin-bottom: 12px; }
+  .hero h1 { font-family: var(--serif); font-size: 36px; line-height: 1.1; margin-bottom: 12px; }
+  .hero h1 em { color: var(--brass); font-style: italic; }
+  .hero p { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .hero-cta { display: flex; gap: 10px; }
+  .btn {
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--cream);
+    padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 14px; transition: .16s;
+  }
+  .btn:hover { border-color: var(--brass-dim); }
+  .btn.primary {
+    background: linear-gradient(145deg, var(--brass), var(--brass-dim)); color: #1c1608; border: none;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  .hero-chips { margin-left: auto; display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .chip3d {
+    width: 66px; height: 66px; border-radius: 50%;
+    display: grid; place-items: center; font-family: var(--serif); font-weight: 700; font-size: 17px;
+    border: 3px dashed rgba(255,255,255,.35);
+    box-shadow: 0 10px 24px -10px rgba(0,0,0,.7), inset 0 2px 6px rgba(255,255,255,.15);
+    color: #fff;
+  }
+  .chip3d.c1 { background: radial-gradient(circle at 35% 30%, #e5484d, #9e2a2f); }
+  .chip3d.c2 { background: radial-gradient(circle at 35% 30%, #3a4a3f, #16211a); }
+  .chip3d.c3 { background: radial-gradient(circle at 35% 30%, var(--brass), var(--brass-dim)); color:#1c1608; border-color: rgba(255,255,255,.5); }
+  .chip3d.c4 { background: radial-gradient(circle at 35% 30%, #4ea8de, #235f86); }
+  .chip3d.c5 { background: radial-gradient(circle at 35% 30%, #6f5bd1, #392a7a); }
+  .chip3d.c6 { background: radial-gradient(circle at 35% 30%, #2b3a30, #101a14); }
+
+  .grid { display: grid; gap: 16px; }
+  .games-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .game-tile {
+    position: relative; border-radius: var(--radius); overflow: hidden;
+    border: 1px solid var(--line); background: var(--surface);
+    aspect-ratio: 4/3; display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 15px; transition: .18s; cursor: pointer;
+  }
+  .game-tile:hover { transform: translateY(-4px); border-color: var(--brass-dim); box-shadow: var(--shadow); }
+  .game-tile .glow { position: absolute; inset: 0; opacity: .9; }
+  .game-tile .gt-body { position: relative; z-index: 2; }
+  .game-tile h3 { font-size: 16px; font-weight: 700; }
+  .game-tile span { font-size: 12px; color: rgba(255,255,255,.7); }
+  .gt-fair { position: absolute; top: 11px; left: 11px; z-index: 2; font-size: 9px; letter-spacing:.1em; text-transform: uppercase; font-weight: 700;
+    background: rgba(10,19,16,.7); border:1px solid var(--line); color: var(--brass); padding: 3px 7px; border-radius: 999px; }
+  .g-dice  .glow { background: radial-gradient(120% 120% at 70% 10%, #2a5c46, #0c1712); }
+  .g-crash .glow { background: radial-gradient(120% 120% at 70% 10%, #5a3a2a, #12100c); }
+  .g-mines .glow { background: radial-gradient(120% 120% at 70% 10%, #3a2a5c, #100c17); }
+  .g-roul  .glow { background: radial-gradient(120% 120% at 70% 10%, #5c2a2a, #170c0c); }
+  .g-black .glow { background: radial-gradient(120% 120% at 70% 10%, #2a4a5c, #0c1417); }
+  .g-plinko .glow { background: radial-gradient(120% 120% at 70% 10%, #2a5c58, #0c1716); }
+
+  /* ---------- Game panel (Dice / Crash / Mines) ---------- */
+  .game-layout { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+  .panel { padding: 20px; }
+  .panel h3 { font-size: 14px; letter-spacing: .04em; margin-bottom: 16px; color: var(--cream); display:flex; align-items:center; gap:8px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .input-wrap { display: flex; align-items: center; background: var(--felt); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .input-wrap input {
+    flex: 1; min-width: 0; background: none; border: none; color: var(--cream);
+    font-family: var(--mono); font-size: 15px; padding: 11px 13px; outline: none;
+  }
+  .input-wrap .suffix { padding: 0 12px; color: var(--muted); font-size: 12px; }
+  .input-wrap .qbtn { background: var(--surface-2); border: none; color: var(--muted); padding: 0 12px; align-self: stretch; font-size: 12px; font-weight: 700; }
+  .input-wrap .qbtn:hover { color: var(--cream); }
+  .seg { display: flex; background: var(--felt); border: 1px solid var(--line); border-radius: 10px; padding: 4px; gap: 4px; }
+  .seg button { flex: 1; background: none; border: none; color: var(--muted); padding: 9px; border-radius: 7px; font-weight: 600; font-size: 13px; transition: .14s; }
+  .seg button.active { background: var(--surface-2); color: var(--cream); }
+  .stat-row { display: flex; justify-content: space-between; font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+  .stat-row:last-child { border: none; }
+  .stat-row span { color: var(--muted); }
+  .stat-row b { font-family: var(--mono); font-weight: 600; }
+  .btn-bet {
+    width: 100%; margin-top: 8px; padding: 15px; border: none; border-radius: 11px;
+    font-size: 16px; font-weight: 700; letter-spacing: .02em;
+    background: linear-gradient(145deg, var(--brass), var(--brass-dim)); color: #1c1608;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), var(--shadow); transition: .12s;
+  }
+  .btn-bet:hover { filter: brightness(1.06); }
+  .btn-bet:active { transform: translateY(1px); }
+  .btn-bet:disabled { filter: grayscale(.5) brightness(.7); cursor: not-allowed; }
+
+  .stage { padding: 24px; min-height: 340px; display: flex; flex-direction: column; }
+
+  /* Dice stage */
+  .dice-readout { text-align: center; padding: 20px 0 26px; }
+  .dice-num { font-family: var(--serif); font-size: 72px; font-weight: 700; line-height: 1; transition: color .2s; }
+  .dice-num.win { color: var(--win); } .dice-num.loss { color: var(--loss); }
+  .dice-verdict { font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-top: 8px; height: 16px; }
+  .track { position: relative; height: 46px; border-radius: 10px; background: var(--felt); border: 1px solid var(--line); margin: 6px 0 4px; overflow: hidden; }
+  .track .zone-lose { position: absolute; top: 0; bottom: 0; left: 0; background: rgba(248,113,90,.14); }
+  .track .zone-win  { position: absolute; top: 0; bottom: 0; right: 0; background: rgba(74,222,128,.14); }
+  .track .marker { position: absolute; top: -3px; bottom: -3px; width: 3px; background: var(--brass); box-shadow: 0 0 10px var(--brass); transition: left .5s cubic-bezier(.2,.8,.2,1); }
+  .track .ball { position: absolute; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff, var(--brass)); box-shadow: 0 4px 12px rgba(0,0,0,.6); transition: left .55s cubic-bezier(.34,1.56,.4,1); z-index: 3; }
+  .track-scale { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted-2); font-family: var(--mono); }
+
+  /* Crash stage */
+  #crashCanvas { width: 100%; height: 260px; display: block; }
+  .crash-multi { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-family: var(--serif); font-weight: 700; font-size: 60px; pointer-events: none; }
+  .crash-wrap { position: relative; flex: 1; }
+
+  /* Mines grid */
+  .mines-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; max-width: 380px; margin: 10px auto; }
+  .mine-cell {
+    aspect-ratio: 1; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line);
+    display: grid; place-items: center; font-size: 22px; transition: .15s; cursor: pointer;
+  }
+  .mine-cell:hover:not(.revealed) { border-color: var(--brass-dim); transform: translateY(-2px); }
+  .mine-cell.gem { background: rgba(74,222,128,.14); border-color: rgba(74,222,128,.4); }
+  .mine-cell.boom { background: rgba(248,113,90,.18); border-color: rgba(248,113,90,.5); }
+
+  .flash { animation: flash .5s; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(212,184,118,.5);} 100% { box-shadow: 0 0 0 20px rgba(212,184,118,0);} }
+
+  /* Verify / fairness panel */
+  .fair-panel { margin-top: 18px; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 14px; align-items: center; font-size: 12.5px; padding: 4px 0; }
+  .kv .k { color: var(--muted); }
+  .kv .v { font-family: var(--mono); word-break: break-all; color: var(--cream); }
+  .kv .v.hash { color: var(--brass-dim); }
+  .history { margin-top: 4px; max-height: 220px; overflow-y: auto; }
+  .hrow { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+  .hrow .mono { font-size: 12.5px; }
+  .hrow .r-win { color: var(--win); } .hrow .r-loss { color: var(--loss); }
+
+  /* ---------- Live ---------- */
+  .live-grid { grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); }
+  .stream {
+    border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: var(--surface);
+    cursor: pointer; transition: .18s;
+  }
+  .stream:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--brass-dim); }
+  .stream .thumb { position: relative; aspect-ratio: 16/9; display: grid; place-items: center; overflow: hidden; }
+  .stream .thumb .ov { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgba(8,15,12,.85)); }
+  .stream .live-tag { position: absolute; top: 10px; left: 10px; z-index: 2; display: flex; align-items: center; gap: 5px;
+    background: rgba(229,72,77,.16); border: 1px solid rgba(229,72,77,.5); color: #ffb4b4; font-size: 10px; font-weight: 700; letter-spacing: .1em; padding: 4px 8px; border-radius: 6px; }
+  .stream .viewers { position: absolute; top: 10px; right: 10px; z-index: 2; background: rgba(8,15,12,.7); border: 1px solid var(--line); font-size: 11px; padding: 3px 8px; border-radius: 6px; color: var(--muted); }
+  .stream .play { width: 54px; height: 54px; border-radius: 50%; background: rgba(212,184,118,.9); display: grid; place-items: center; color: #1c1608; z-index: 2; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .stream .meta { padding: 13px 15px; }
+  .stream .meta h4 { font-size: 14px; margin: 0 0 3px; }
+  .stream .meta p { font-size: 12px; color: var(--muted); margin: 0; }
+  .sf-a .thumb { background: linear-gradient(120deg, #123b2a, #0b2f3b); }
+  .sf-b .thumb { background: linear-gradient(120deg, #3b2312, #0b1f3b); }
+  .sf-c .thumb { background: linear-gradient(120deg, #2a123b, #3b0b1f); }
+  .sf-d .thumb { background: linear-gradient(120deg, #123b38, #1a3b0b); }
+  .sf-e .thumb { background: linear-gradient(120deg, #3b1236, #0b153b); }
+  .sf-f .thumb { background: linear-gradient(120deg, #2f3b12, #3b1a0b); }
+
+  /* ---------- Sports ---------- */
+  .sports-layout { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+  .match { padding: 16px 18px; margin-bottom: 12px; }
+  .match-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .match-league { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .match-live { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--live); font-weight: 700; margin-left: auto; }
+  .match-clock { font-family: var(--mono); font-size: 12px; color: var(--brass-dim); }
+  .match-teams { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .team { display: flex; align-items: center; gap: 10px; flex: 1; }
+  .team .crest { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; }
+  .team .tname { font-weight: 600; font-size: 14px; }
+  .match-score { font-family: var(--serif); font-size: 26px; font-weight: 700; }
+  .odds-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+  .odds-btn {
+    background: var(--felt); border: 1px solid var(--line); border-radius: 9px; padding: 10px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; transition: .14s; color: var(--cream);
+  }
+  .odds-btn:hover { border-color: var(--brass); background: var(--surface-2); }
+  .odds-btn.picked { border-color: var(--brass); background: rgba(212,184,118,.12); }
+  .odds-btn small { font-size: 10px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+  .odds-btn b { font-family: var(--mono); font-size: 15px; color: var(--brass); }
+  .odds-btn .drift { font-size: 10px; }
+  .drift.up { color: var(--win); } .drift.down { color: var(--loss); }
+
+  .slip { padding: 18px; position: sticky; top: 90px; }
+  .slip h3 { font-size: 14px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .slip .count { background: var(--brass); color: #1c1608; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px; }
+  .slip-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 30px 0; }
+  .slip-leg { background: var(--felt); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; margin-bottom: 9px; }
+  .slip-leg .sl-top { display: flex; justify-content: space-between; font-size: 12px; }
+  .slip-leg .sl-sel { font-weight: 600; font-size: 13px; margin: 3px 0; }
+  .slip-leg .sl-odds { font-family: var(--mono); color: var(--brass); font-weight: 600; }
+  .slip-leg .rm { background: none; border: none; color: var(--muted-2); font-size: 15px; padding: 0; }
+  .slip-leg .rm:hover { color: var(--loss); }
+  .slip-foot { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+
+  /* ---------- Affiliate / Admin ---------- */
+  .stat-cards { grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); margin-bottom: 22px; }
+  .stat-card { padding: 18px 20px; }
+  .stat-card .sc-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .stat-card .sc-val { font-family: var(--serif); font-size: 30px; font-weight: 700; margin: 6px 0 2px; }
+  .stat-card .sc-val.brass { color: var(--brass); }
+  .stat-card .sc-delta { font-size: 12px; color: var(--win); }
+  .stat-card .sc-spark { margin-top: 10px; }
+
+  .tree { padding: 20px 22px; }
+  .tnode { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+  .tnode .depth { display: inline-block; }
+  .tnode .tavatar { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+  .tnode .tname { font-weight: 600; font-size: 14px; }
+  .tnode .trole { font-size: 11px; color: var(--muted); }
+  .tnode .tmeta { margin-left: auto; text-align: right; }
+  .tnode .tearn { font-family: var(--mono); font-weight: 600; color: var(--brass); }
+  .tnode .tsub { font-size: 11px; color: var(--muted); }
+  .tline { border-left: 2px solid var(--line); margin-left: 15px; padding-left: 20px; }
+
+  table.data { width: 100%; border-collapse: collapse; }
+  table.data th { text-align: left; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  table.data td { padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+  table.data td.mono { font-family: var(--mono); }
+  table.data tr:hover td { background: rgba(23,42,32,.4); }
+  .tier-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+  .tier-1 { background: rgba(212,184,118,.16); color: var(--brass); }
+  .tier-2 { background: rgba(78,168,222,.16); color: #7cc4f0; }
+  .tier-3 { background: rgba(111,91,209,.16); color: #a99cf0; }
+
+  .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .switch { width: 40px; height: 22px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); position: relative; transition: .18s; }
+  .switch::after { content:""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); top: 2px; left: 2px; transition: .18s; }
+  .switch.on { background: rgba(74,222,128,.2); border-color: rgba(74,222,128,.5); }
+  .switch.on::after { left: 20px; background: var(--win); }
+
+  .verify-box { margin-top: 14px; }
+  .verify-out { margin-top: 12px; padding: 12px 14px; border-radius: 10px; font-family: var(--mono); font-size: 13px; border: 1px solid var(--line); background: var(--felt); }
+  .verify-out.ok { border-color: rgba(74,222,128,.4); color: var(--win); }
+  .verify-out.bad { border-color: rgba(248,113,90,.4); color: var(--loss); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px;
+    padding: 13px 20px; font-size: 14px; box-shadow: var(--shadow); opacity: 0; transition: .3s; z-index: 100;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .t-ico { font-size: 16px; }
+  .toast.win { border-color: rgba(74,222,128,.4); }
+  .toast.loss { border-color: rgba(248,113,90,.4); }
+
+  .spark { display: block; }
+  @media (max-width: 1000px) {
+    .app { grid-template-columns: 1fr; }
+    .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .rail .nav { flex-direction: row; flex-wrap: wrap; }
+    .nav-label, .rail-foot { display: none; }
+    .game-layout, .sports-layout { grid-template-columns: 1fr; }
+    .hero { flex-direction: column; align-items: flex-start; }
+    .hero-chips { margin: 0; }
+  }
+</style>
+
+<div class="app">
+  <!-- ================= RAIL ================= -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div>
+        <div class="brand-name">AURUM</div>
+        <div class="brand-sub">Provably Fair</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">Play</div>
+      <a class="nav-item active" data-view="casino"><span class="ni-ico">◈</span> Casino</a>
+      <a class="nav-item" data-view="live"><span class="ni-ico">◉</span> Live Casino<span class="badge-live"><span class="dot-live"></span>LIVE</span></a>
+      <a class="nav-item" data-view="sports"><span class="ni-ico">⚽</span> Sportsbook<span class="badge-live"><span class="dot-live"></span>LIVE</span></a>
+      <div class="nav-label" style="margin-top:8px">Business</div>
+      <a class="nav-item" data-view="affiliate"><span class="ni-ico">◇</span> Affiliate</a>
+      <a class="nav-item" data-view="admin"><span class="ni-ico">⚙</span> Admin Panel</a>
+    </nav>
+
+    <div class="rail-foot">
+      <b>AURUM Engine v0.1</b><br>
+      HMAC-SHA256 RNG · in-house<br>
+      betting · multi-tier agents
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+    <header class="topbar">
+      <div class="view-title" id="viewTitle">Casino Lobby<small id="viewSub">Provably-fair originals & live tables</small></div>
+      <div class="topbar-spacer"></div>
+      <div class="wallet">
+        <div>
+          <div class="wallet-label">Balance</div>
+          <div><span class="wallet-amt mono" id="balance">10,000.00</span><span class="wallet-cur">GC</span></div>
+        </div>
+        <button class="btn-deposit" id="depositBtn">+ Add</button>
+      </div>
+      <div class="avatar">LL</div>
+    </header>
+
+    <div class="content">
+      <!-- ============ CASINO ============ -->
+      <section class="view active" id="view-casino">
+        <div class="hero">
+          <div class="hero-copy">
+            <div class="eyebrow">In-house · Provably Fair</div>
+            <h1>Every roll, <em>mathematically</em> verifiable.</h1>
+            <p>AURUM originals run on an HMAC-SHA256 commit-reveal engine. We publish the server-seed hash before you bet — verify any result yourself, any time.</p>
+            <div class="hero-cta">
+              <button class="btn primary" data-open-game="dice">Play Dice</button>
+              <button class="btn" data-view-jump="admin">See the RNG →</button>
+            </div>
+          </div>
+          <div class="hero-chips">
+            <div class="chip3d c1">100</div><div class="chip3d c3">500</div><div class="chip3d c4">1K</div>
+            <div class="chip3d c5">5K</div><div class="chip3d c2">25</div><div class="chip3d c6">10K</div>
+          </div>
+        </div>
+
+        <div class="section-head"><h2>Originals</h2><p>Provably-fair house games</p></div>
+        <div class="grid games-grid" id="gamesGrid">
+          <div class="game-tile g-dice" data-open-game="dice"><div class="glow"></div><span class="gt-fair">Provably Fair</span><div class="gt-body"><h3>Dice</h3><span>1% edge · instant</span></div></div>
+          <div class="game-tile g-crash" data-open-game="crash"><div class="glow"></div><span class="gt-fair">Provably Fair</span><div class="gt-body"><h3>Crash</h3><span>Cash out before bust</span></div></div>
+          <div class="game-tile g-mines" data-open-game="mines"><div class="glow"></div><span class="gt-fair">Provably Fair</span><div class="gt-body"><h3>Mines</h3><span>Find the gems</span></div></div>
+          <div class="game-tile g-roul" data-demo><div class="glow"></div><span class="gt-fair">Provably Fair</span><div class="gt-body"><h3>Roulette</h3><span>European · single 0</span></div></div>
+          <div class="game-tile g-black" data-demo><div class="glow"></div><span class="gt-fair">Provably Fair</span><div class="gt-body"><h3>Blackjack</h3><span>3:2 payouts</span></div></div>
+          <div class="game-tile g-plinko" data-demo><div class="glow"></div><span class="gt-fair">Provably Fair</span><div class="gt-body"><h3>Plinko</h3><span>16 rows · high risk</span></div></div>
+        </div>
+
+        <!-- Active game surface -->
+        <div id="gameSurface" style="margin-top:28px"></div>
+      </section>
+
+      <!-- ============ LIVE ============ -->
+      <section class="view" id="view-live">
+        <div class="section-head"><h2>Live Casino & Streaming</h2><p>Real-dealer tables and live sports feeds</p></div>
+        <div class="grid live-grid" id="liveGrid"></div>
+      </section>
+
+      <!-- ============ SPORTS ============ -->
+      <section class="view" id="view-sports">
+        <div class="section-head"><h2>Sportsbook</h2><p>Live &amp; pre-match — in-house pricing engine</p></div>
+        <div class="sports-layout">
+          <div id="matchList"></div>
+          <div class="card slip" id="betSlip">
+            <h3>Bet Slip <span class="count" id="slipCount">0</span></h3>
+            <div id="slipBody"><div class="slip-empty">Tap any odds to add a selection.<br>Combine legs for a parlay.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ AFFILIATE ============ -->
+      <section class="view" id="view-affiliate">
+        <div class="section-head"><h2>Agent &amp; Affiliate Network</h2><p>Multi-tier revenue share · live commission rollup</p></div>
+        <div class="grid stat-cards" id="affStats"></div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:18px; align-items:start">
+          <div class="card tree">
+            <h3 style="font-size:14px;margin-bottom:8px">Downline Structure</h3>
+            <p style="color:var(--muted);font-size:12px;margin:0 0 14px">Commission flows up: T1 8% · T2 3% · T3 1% of GGR</p>
+            <div id="treeBox"></div>
+          </div>
+          <div class="card" style="padding:20px 22px">
+            <h3 style="font-size:14px;margin-bottom:14px">Commission Ledger</h3>
+            <div style="overflow-x:auto"><table class="data" id="ledgerTable"></table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ADMIN ============ -->
+      <section class="view" id="view-admin">
+        <div class="section-head"><h2>Admin — RNG &amp; Fairness Control</h2><p>Operator oversight of the provably-fair engine</p></div>
+        <div class="grid stat-cards" id="adminStats"></div>
+        <div class="grid" style="grid-template-columns: 1.2fr 1fr; gap:18px; align-items:start">
+          <div class="card panel">
+            <h3>◆ Independent Bet Verifier</h3>
+            <p style="color:var(--muted);font-size:12.5px;margin:-8px 0 14px">Paste any historical bet's seeds &amp; nonce. The engine recomputes the outcome and checks the seed hash — exactly what a player runs to audit us.</p>
+            <div class="verify-box">
+              <div class="field"><label>Server Seed (revealed)</label><div class="input-wrap"><input id="vServer" class="mono" value=""></div></div>
+              <div class="field"><label>Server Seed Hash (committed)</label><div class="input-wrap"><input id="vHash" class="mono" value=""></div></div>
+              <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <div class="field"><label>Client Seed</label><div class="input-wrap"><input id="vClient" class="mono" value=""></div></div>
+                <div class="field"><label>Nonce</label><div class="input-wrap"><input id="vNonce" class="mono" value="0"></div></div>
+                <div class="field"><label>Game</label><div class="input-wrap"><input id="vGame" class="mono" value="dice"></div></div>
+              </div>
+              <button class="btn primary" id="verifyBtn" style="width:100%">Verify Outcome</button>
+              <div class="verify-out" id="verifyOut" style="display:none"></div>
+            </div>
+          </div>
+          <div class="card panel">
+            <h3>⚙ RNG Configuration</h3>
+            <div class="stat-row"><span>Algorithm</span><b class="mono" style="font-size:12px">HMAC_SHA256</b></div>
+            <div class="stat-row"><span>Seed derivation</span><b class="mono" style="font-size:12px">serverSeed · client:nonce</b></div>
+            <div class="stat-row"><span>House edge (Dice)</span><b class="mono">1.00%</b></div>
+            <div class="stat-row"><span>Commit-reveal</span><b class="mono" style="color:var(--win)">Enforced</b></div>
+            <div style="margin:16px 0 6px;display:flex;flex-direction:column;gap:12px">
+              <label class="toggle" data-toggle><span class="switch on"></span> Publish server-seed hash before bet</label>
+              <label class="toggle" data-toggle><span class="switch on"></span> Auto-rotate seed on client change</label>
+              <label class="toggle" data-toggle><span class="switch"></span> Maintenance mode (halt new bets)</label>
+            </div>
+            <h3 style="margin:20px 0 12px;font-size:14px">Live Player Seeds</h3>
+            <div style="overflow-x:auto"><table class="data" id="rngTable"></table></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="t-ico">◆</span><span id="toastMsg"></span></div>
+
+<script>
+/* ============================================================
+   AURUM — provably-fair virtual casino prototype (client demo)
+   The provably-fair engine below mirrors backend/src/provablyFair.js
+   exactly, using the browser's Web Crypto for HMAC-SHA256, so any
+   result rendered here is independently verifiable.
+   ============================================================ */
+(function () {
+  "use strict";
+  const enc = new TextEncoder();
+  const hex = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+
+  async function sha256(str) { return hex(await crypto.subtle.digest("SHA-256", enc.encode(str))); }
+  async function hmac(serverSeed, msg) {
+    const key = await crypto.subtle.importKey("raw", enc.encode(serverSeed), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    return hex(await crypto.subtle.sign("HMAC", key, enc.encode(msg)));
+  }
+  function randHex(bytes) { const a = new Uint8Array(bytes); crypto.getRandomValues(a); return hex(a.buffer); }
+  function floatFrom(digest) { return parseInt(digest.substring(0, 8), 16) / 0x100000000; }
+
+  async function diceRoll(s, c, n) { return Math.floor(floatFrom(await hmac(s, `${c}:${n}`)) * 10001) / 100; }
+  async function crashPoint(s, c, n, edge = 0.01) {
+    const h = await hmac(s, `${c}:${n}`);
+    const int = parseInt(h.substring(0, 13), 16), e = Math.pow(2, 52);
+    if (int % Math.floor(1 / edge) === 0) return 1.0;
+    return Math.max(1.0, Math.floor((100 * e - int) / (e - int)) / 100);
+  }
+  async function minesLayout(s, c, n, size = 25, mines = 3) {
+    const tiles = Array.from({ length: size }, (_, i) => i);
+    for (let i = size - 1; i > 0; i--) {
+      const f = parseInt((await hmac(s, `${c}:${i}:${n}`)).substring(0, 8), 16) / 0x100000000;
+      const j = Math.floor(f * (i + 1));
+      [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+    }
+    return tiles.slice(0, mines).sort((a, b) => a - b);
+  }
+
+  /* --------------------- state --------------------- */
+  const state = {
+    balance: 10000,
+    seed: null,          // {serverSeed, serverSeedHash, clientSeed, nonce}
+    lastBet: null,
+    history: [],
+    slip: [],
+    activeGame: null,
+  };
+  const fmt = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  async function initSeed() {
+    const serverSeed = randHex(32);
+    state.seed = { serverSeed, serverSeedHash: await sha256(serverSeed), clientSeed: randHex(8), nonce: 0 };
+  }
+
+  function setBalance(v) { state.balance = Math.max(0, v); $("#balance").textContent = fmt(state.balance); }
+
+  let toastTimer;
+  function toast(msg, kind) {
+    const t = $("#toast");
+    $("#toastMsg").textContent = msg;
+    $(".t-ico", t).textContent = kind === "win" ? "✦" : kind === "loss" ? "✕" : "◆";
+    t.className = "toast show " + (kind || "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
+
+  /* --------------------- navigation --------------------- */
+  const titles = {
+    casino: ["Casino Lobby", "Provably-fair originals & live tables"],
+    live: ["Live Casino", "Real-dealer tables & live streaming"],
+    sports: ["Sportsbook", "Live & pre-match — in-house pricing"],
+    affiliate: ["Affiliate Network", "Multi-tier agent revenue share"],
+    admin: ["Admin Panel", "RNG oversight & fairness control"],
+  };
+  function go(view) {
+    $$(".view").forEach(v => v.classList.remove("active"));
+    $("#view-" + view).classList.add("active");
+    $$(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.view === view));
+    $("#viewTitle").firstChild.textContent = titles[view][0];
+    $("#viewSub").textContent = titles[view][1];
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (view === "affiliate") renderAffiliate();
+    if (view === "admin") renderAdmin();
+  }
+  $$(".nav-item").forEach(n => n.addEventListener("click", () => go(n.dataset.view)));
+  $$("[data-view-jump]").forEach(b => b.addEventListener("click", () => go(b.dataset.viewJump)));
+  $$("[data-demo]").forEach(t => t.addEventListener("click", () => toast("This original is available in the full build.", "")));
+  $("#depositBtn").addEventListener("click", () => { setBalance(state.balance + 5000); toast("+5,000 GC added to your wallet", "win"); });
+
+  /* ===================================================================
+     GAME SURFACE — Dice / Crash / Mines
+     =================================================================== */
+  const surface = $("#gameSurface");
+  $$("[data-open-game]").forEach(el => el.addEventListener("click", () => openGame(el.dataset.openGame)));
+
+  function openGame(game) {
+    state.activeGame = game;
+    if (game === "dice") renderDice();
+    else if (game === "crash") renderCrash();
+    else if (game === "mines") renderMines();
+    surface.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* -------- DICE -------- */
+  function renderDice() {
+    surface.innerHTML = `
+      <div class="section-head"><h2>Dice</h2><p class="mono" id="dSeedHash" style="font-size:12px"></p></div>
+      <div class="game-layout">
+        <div class="card panel">
+          <h3>◈ Place Bet</h3>
+          <div class="field"><label>Bet Amount</label>
+            <div class="input-wrap"><input id="dStake" class="mono" value="100" inputmode="decimal">
+              <button class="qbtn" data-mult="0.5">½</button><button class="qbtn" data-mult="2">2×</button></div>
+          </div>
+          <div class="field"><label>Direction</label>
+            <div class="seg" id="dDir"><button data-dir="under" class="active">Roll Under</button><button data-dir="over">Roll Over</button></div>
+          </div>
+          <div class="field"><label>Target · <span id="dTargetLbl" class="mono">50.00</span></label>
+            <div class="input-wrap"><input id="dTarget" type="range" min="2" max="98" value="50" step="1" style="accent-color:var(--brass);padding:11px 13px"></div>
+          </div>
+          <div class="stat-row"><span>Win Chance</span><b id="dChance">50.00%</b></div>
+          <div class="stat-row"><span>Multiplier</span><b id="dMult">1.9800×</b></div>
+          <div class="stat-row"><span>Profit on Win</span><b id="dProfit" style="color:var(--win)">98.00</b></div>
+          <button class="btn-bet" id="dRoll">Roll Dice</button>
+        </div>
+        <div class="card stage">
+          <div class="dice-readout">
+            <div class="dice-num mono" id="dNum">–</div>
+            <div class="dice-verdict" id="dVerdict">set your target and roll</div>
+          </div>
+          <div class="track" id="dTrack">
+            <div class="zone-lose" id="dZoneLose"></div><div class="zone-win" id="dZoneWin"></div>
+            <div class="marker" id="dMarker"></div><div class="ball" id="dBall" style="left:50%"></div>
+          </div>
+          <div class="track-scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+          <div class="card fair-panel" style="padding:15px 16px;margin-top:20px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <h3 style="margin:0;font-size:13px">◆ Fairness</h3>
+              <button class="btn" id="dRotate" style="padding:6px 12px;font-size:12px">Rotate Seed</button>
+            </div>
+            <div class="kv">
+              <div class="k">Server hash</div><div class="v hash" id="fHash"></div>
+              <div class="k">Client seed</div><div class="v" id="fClient"></div>
+              <div class="k">Nonce</div><div class="v" id="fNonce"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card panel" style="margin-top:18px">
+        <h3>Recent Rolls</h3>
+        <div class="history" id="dHistory"><div class="slip-empty">No rolls yet — your verifiable bet history appears here.</div></div>
+      </div>`;
+
+    const stakeEl = $("#dStake"), targetEl = $("#dTarget");
+    let dir = "under";
+    function recompute() {
+      const target = +targetEl.value;
+      const chance = dir === "under" ? target : 100 - target;
+      const mult = (100 / chance) * 0.99;
+      const stake = +stakeEl.value || 0;
+      $("#dTargetLbl").textContent = target.toFixed(2);
+      $("#dChance").textContent = chance.toFixed(2) + "%";
+      $("#dMult").textContent = mult.toFixed(4) + "×";
+      $("#dProfit").textContent = fmt(stake * mult - stake);
+      // move win/lose zones
+      const pct = target;
+      $("#dZoneLose").style.width = (dir === "under" ? 0 : pct) + "%";
+      $("#dZoneLose").style.left = 0; $("#dZoneLose").style.right = "auto";
+      $("#dZoneWin").style.width = (dir === "under" ? pct : 100 - pct) + "%";
+      if (dir === "under") { $("#dZoneWin").style.left = 0; $("#dZoneWin").style.right = "auto"; $("#dZoneLose").style.width = (100 - pct) + "%"; $("#dZoneLose").style.left = "auto"; $("#dZoneLose").style.right = 0; }
+      else { $("#dZoneWin").style.right = 0; $("#dZoneWin").style.left = "auto"; $("#dZoneLose").style.width = pct + "%"; $("#dZoneLose").style.left = 0; $("#dZoneLose").style.right = "auto"; }
+      $("#dMarker").style.left = pct + "%";
+    }
+    $$("#dDir button").forEach(b => b.addEventListener("click", () => { $$("#dDir button").forEach(x => x.classList.remove("active")); b.classList.add("active"); dir = b.dataset.dir; recompute(); }));
+    targetEl.addEventListener("input", recompute);
+    stakeEl.addEventListener("input", recompute);
+    $$('[data-mult]', surface).forEach(b => b.addEventListener("click", () => { stakeEl.value = Math.max(1, Math.round((+stakeEl.value || 0) * +b.dataset.mult)); recompute(); }));
+    updateFairness();
+    recompute();
+
+    $("#dRotate").addEventListener("click", async () => {
+      const old = state.seed;
+      await initSeed();
+      updateFairness();
+      toast("Seed rotated · previous server seed revealed for audit", "");
+      console.log("[AURUM] Revealed previous server seed:", old.serverSeed, "hash:", old.serverSeedHash);
+    });
+
+    $("#dRoll").addEventListener("click", async () => {
+      const stake = +stakeEl.value || 0;
+      if (stake <= 0) return toast("Enter a valid stake", "loss");
+      if (stake > state.balance) return toast("Insufficient balance", "loss");
+      const target = +targetEl.value;
+      const nonce = state.seed.nonce;
+      const roll = await diceRoll(state.seed.serverSeed, state.seed.clientSeed, nonce);
+      state.seed.nonce++;
+      const won = dir === "under" ? roll < target : roll > target;
+      const chance = dir === "under" ? target : 100 - target;
+      const mult = (100 / chance) * 0.99;
+      setBalance(state.balance - stake + (won ? stake * mult : 0));
+
+      const numEl = $("#dNum");
+      numEl.textContent = roll.toFixed(2);
+      numEl.className = "dice-num mono " + (won ? "win" : "loss");
+      $("#dVerdict").textContent = won ? `WIN · +${fmt(stake * mult - stake)} GC` : "NO WIN";
+      $("#dBall").style.left = roll + "%";
+      $("#dTrack").classList.remove("flash"); void $("#dTrack").offsetWidth; $("#dTrack").classList.add("flash");
+      toast(won ? `You won ${fmt(stake * mult)} GC!` : `Rolled ${roll.toFixed(2)} — no win`, won ? "win" : "loss");
+
+      state.lastBet = { serverSeed: state.seed.serverSeed, serverSeedHash: state.seed.serverSeedHash, clientSeed: state.seed.clientSeed, nonce, game: "dice", roll };
+      state.history.unshift({ roll, target, dir, won, mult, stake, nonce, hash: state.seed.serverSeedHash });
+      renderDiceHistory();
+      updateFairness();
+    });
+
+    renderDiceHistory();
+  }
+  function updateFairness() {
+    if (!$("#fHash")) return;
+    $("#fHash").textContent = state.seed.serverSeedHash.slice(0, 24) + "…";
+    $("#fClient").textContent = state.seed.clientSeed;
+    $("#fNonce").textContent = state.seed.nonce;
+    if ($("#dSeedHash")) $("#dSeedHash").textContent = "committed hash " + state.seed.serverSeedHash.slice(0, 16) + "…";
+  }
+  function renderDiceHistory() {
+    const box = $("#dHistory"); if (!box) return;
+    if (!state.history.length) return;
+    box.innerHTML = state.history.slice(0, 12).map(h => `
+      <div class="hrow">
+        <span class="mono">#${h.nonce} · ${h.dir} ${h.target}</span>
+        <span class="mono">${h.roll.toFixed(2)}</span>
+        <span class="mono">${h.mult.toFixed(2)}×</span>
+        <span class="mono ${h.won ? 'r-win' : 'r-loss'}">${h.won ? '+' + fmt(h.stake * h.mult - h.stake) : '-' + fmt(h.stake)}</span>
+      </div>`).join("");
+  }
+
+  /* -------- CRASH -------- */
+  let crashAnim;
+  function renderCrash() {
+    cancelAnimationFrame(crashAnim);
+    surface.innerHTML = `
+      <div class="section-head"><h2>Crash</h2><p>Cash out before the curve busts</p></div>
+      <div class="game-layout">
+        <div class="card panel">
+          <h3>◈ Place Bet</h3>
+          <div class="field"><label>Bet Amount</label><div class="input-wrap"><input id="cStake" class="mono" value="100"></div></div>
+          <div class="field"><label>Auto Cash-Out</label><div class="input-wrap"><input id="cTarget" class="mono" value="2.00"><span class="suffix">×</span></div></div>
+          <div class="stat-row"><span>Win Chance</span><b id="cChance">~49%</b></div>
+          <div class="stat-row"><span>Profit on Win</span><b id="cProfit" style="color:var(--win)">100.00</b></div>
+          <button class="btn-bet" id="cStart">Start Round</button>
+        </div>
+        <div class="card stage">
+          <div class="crash-wrap">
+            <canvas id="crashCanvas"></canvas>
+            <div class="crash-multi mono" id="cMulti" style="color:var(--brass)">1.00×</div>
+          </div>
+          <div class="dice-verdict" id="cVerdict" style="text-align:center">provably-fair bust point · set target &amp; start</div>
+        </div>
+      </div>`;
+    const stake = $("#cStake"), target = $("#cTarget");
+    function rc() { $("#cProfit").textContent = fmt((+stake.value || 0) * ((+target.value || 1) - 1)); $("#cChance").textContent = "~" + Math.min(99, (99 / (+target.value || 1)).toFixed(0)) + "%"; }
+    stake.addEventListener("input", rc); target.addEventListener("input", rc); rc();
+    setupCanvas();
+    $("#cStart").addEventListener("click", startCrash);
+  }
+  function setupCanvas() {
+    const c = $("#crashCanvas"); if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr; c.height = 260 * dpr;
+    const ctx = c.getContext("2d"); ctx.scale(dpr, dpr);
+    drawCrash(0, 1);
+  }
+  function drawCrash(progress, multi, busted) {
+    const c = $("#crashCanvas"); if (!c) return;
+    const ctx = c.getContext("2d");
+    const W = c.clientWidth, H = 260;
+    ctx.clearRect(0, 0, W, H);
+    // grid
+    ctx.strokeStyle = "rgba(36,56,44,.6)"; ctx.lineWidth = 1;
+    for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, H * i / 5); ctx.lineTo(W, H * i / 5); ctx.stroke(); }
+    // curve
+    const pts = 60;
+    ctx.beginPath();
+    for (let i = 0; i <= pts * progress; i++) {
+      const t = i / pts;
+      const x = t * W;
+      const m = 1 + (multi - 1) * Math.pow(t, 1.7);
+      const y = H - (H * (Math.min(m, 10) - 1) / 9) - 4;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = busted ? "#f8715a" : "#d4b876";
+    ctx.lineWidth = 3; ctx.shadowColor = busted ? "rgba(248,113,90,.6)" : "rgba(212,184,118,.6)"; ctx.shadowBlur = 12;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // fill under curve
+    ctx.lineTo(W * progress, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fillStyle = busted ? "rgba(248,113,90,.08)" : "rgba(212,184,118,.08)"; ctx.fill();
+  }
+  async function startCrash() {
+    const btn = $("#cStart"); btn.disabled = true;
+    const stake = +$("#cStake").value || 0;
+    const auto = +$("#cTarget").value || 1;
+    if (stake <= 0 || stake > state.balance) { btn.disabled = false; return toast("Invalid stake", "loss"); }
+    setBalance(state.balance - stake);
+    const nonce = state.seed.nonce++;
+    const bust = await crashPoint(state.seed.serverSeed, state.seed.clientSeed, nonce);
+    let start = null; const dur = Math.min(6000, 1200 + Math.log(bust) * 1800);
+    const multiEl = $("#cMulti"), verdict = $("#cVerdict");
+    function frame(ts) {
+      if (!start) start = ts;
+      const p = Math.min(1, (ts - start) / dur);
+      const cur = 1 + (bust - 1) * p;
+      multiEl.textContent = cur.toFixed(2) + "×";
+      drawCrash(p, bust, false);
+      if (auto <= cur && auto <= bust) { // cashed out
+        setBalance(state.balance + stake * auto);
+        multiEl.style.color = "var(--win)";
+        verdict.textContent = `Cashed out at ${auto.toFixed(2)}× · +${fmt(stake * auto - stake)} GC`;
+        toast(`Cashed out ${fmt(stake * auto)} GC at ${auto.toFixed(2)}×`, "win");
+        drawCrash(p, bust, false); btn.disabled = false; return;
+      }
+      if (p < 1) { crashAnim = requestAnimationFrame(frame); }
+      else {
+        multiEl.textContent = bust.toFixed(2) + "×"; multiEl.style.color = "var(--loss)";
+        verdict.textContent = `Busted at ${bust.toFixed(2)}× · target ${auto.toFixed(2)}× not reached`;
+        drawCrash(1, bust, true);
+        toast(`Busted at ${bust.toFixed(2)}×`, "loss");
+        btn.disabled = false;
+      }
+    }
+    multiEl.style.color = "var(--brass)";
+    crashAnim = requestAnimationFrame(frame);
+  }
+
+  /* -------- MINES -------- */
+  function renderMines() {
+    surface.innerHTML = `
+      <div class="section-head"><h2>Mines</h2><p>Reveal gems, avoid mines — cash out any time</p></div>
+      <div class="game-layout">
+        <div class="card panel">
+          <h3>◈ Setup</h3>
+          <div class="field"><label>Bet Amount</label><div class="input-wrap"><input id="mStake" class="mono" value="100"></div></div>
+          <div class="field"><label>Mines · <span id="mCountLbl" class="mono">3</span></label>
+            <div class="input-wrap"><input id="mCount" type="range" min="1" max="24" value="3" style="accent-color:var(--brass);padding:11px 13px"></div></div>
+          <div class="stat-row"><span>Gems found</span><b id="mFound">0</b></div>
+          <div class="stat-row"><span>Current multiplier</span><b id="mMult">1.00×</b></div>
+          <div class="stat-row"><span>Cash-out value</span><b id="mValue" style="color:var(--brass)">0.00</b></div>
+          <button class="btn-bet" id="mStart">Start Game</button>
+          <button class="btn" id="mCash" style="width:100%;margin-top:8px;display:none">Cash Out</button>
+        </div>
+        <div class="card stage">
+          <div class="mines-grid" id="mGrid"></div>
+          <div class="dice-verdict" id="mVerdict" style="text-align:center;margin-top:14px">start a game to reveal the grid</div>
+        </div>
+      </div>`;
+    const grid = $("#mGrid");
+    for (let i = 0; i < 25; i++) { const cell = document.createElement("div"); cell.className = "mine-cell"; cell.dataset.i = i; grid.appendChild(cell); }
+    $("#mCount").addEventListener("input", e => $("#mCountLbl").textContent = e.target.value);
+    let active = false, layout = [], found = 0, stake = 0, mineCount = 3, safeTotal = 0;
+    function multiplierFor(k) { // fair multiplier after k safe picks
+      let m = 1; const N = 25;
+      for (let i = 0; i < k; i++) m *= (N - i) / (N - mineCount - i);
+      return m * 0.99;
+    }
+    $("#mStart").addEventListener("click", async () => {
+      stake = +$("#mStake").value || 0;
+      if (stake <= 0 || stake > state.balance) return toast("Invalid stake", "loss");
+      mineCount = +$("#mCount").value;
+      setBalance(state.balance - stake);
+      const nonce = state.seed.nonce++;
+      layout = await minesLayout(state.seed.serverSeed, state.seed.clientSeed, nonce, 25, mineCount);
+      active = true; found = 0; safeTotal = 25 - mineCount;
+      $$(".mine-cell", grid).forEach(c => { c.className = "mine-cell"; c.textContent = ""; });
+      $("#mStart").style.display = "none"; $("#mCash").style.display = "block";
+      $("#mVerdict").textContent = "pick a tile…"; $("#mFound").textContent = "0"; $("#mMult").textContent = "1.00×"; $("#mValue").textContent = fmt(stake);
+    });
+    function endGame(revealAll) {
+      active = false; $("#mStart").style.display = "block"; $("#mCash").style.display = "none";
+      if (revealAll) $$(".mine-cell", grid).forEach(c => { if (layout.includes(+c.dataset.i) && !c.classList.contains("boom")) { c.classList.add("revealed"); c.textContent = "✦"; c.style.opacity = ".5"; } });
+    }
+    $("#mCash").addEventListener("click", () => {
+      const val = stake * multiplierFor(found);
+      setBalance(state.balance + val);
+      toast(`Cashed out ${fmt(val)} GC`, "win");
+      $("#mVerdict").textContent = `Cashed out ${fmt(val)} GC at ${multiplierFor(found).toFixed(2)}×`;
+      endGame(true);
+    });
+    grid.addEventListener("click", e => {
+      const cell = e.target.closest(".mine-cell"); if (!cell || !active || cell.classList.contains("revealed")) return;
+      const i = +cell.dataset.i; cell.classList.add("revealed");
+      if (layout.includes(i)) {
+        cell.classList.add("boom"); cell.textContent = "✕";
+        $("#mVerdict").textContent = `Hit a mine — lost ${fmt(stake)} GC`;
+        toast(`Boom! Lost ${fmt(stake)} GC`, "loss");
+        endGame(true);
+      } else {
+        cell.classList.add("gem"); cell.textContent = "✦"; found++;
+        const m = multiplierFor(found);
+        $("#mFound").textContent = found; $("#mMult").textContent = m.toFixed(2) + "×"; $("#mValue").textContent = fmt(stake * m);
+        if (found === safeTotal) { setBalance(state.balance + stake * m); toast(`Cleared the board! +${fmt(stake * m)} GC`, "win"); endGame(true); }
+      }
+    });
+  }
+
+  /* ===================================================================
+     LIVE
+     =================================================================== */
+  const liveTiles = [
+    ["sf-a", "Lightning Roulette", "Evolution · Table 3", "3,412"],
+    ["sf-b", "El Clásico — Live", "La Liga · 2nd Half", "18,204"],
+    ["sf-c", "Speed Blackjack", "Dealer: Marta", "1,987"],
+    ["sf-d", "Live Cricket — T20", "IPL · Innings 1", "9,556"],
+    ["sf-e", "Crazy Time", "Evolution · Wheel", "7,120"],
+    ["sf-f", "NBA — 4th Quarter", "Lakers vs Celtics", "12,880"],
+  ];
+  function renderLive() {
+    $("#liveGrid").innerHTML = liveTiles.map(([cls, title, sub, v]) => `
+      <div class="stream ${cls}">
+        <div class="thumb">
+          <span class="live-tag"><span class="dot-live"></span>LIVE</span>
+          <span class="viewers">👁 ${v}</span>
+          <div class="ov"></div>
+          <div class="play">▶</div>
+        </div>
+        <div class="meta"><h4>${title}</h4><p>${sub}</p></div>
+      </div>`).join("");
+    $$("#liveGrid .stream").forEach(s => s.addEventListener("click", () => toast("Live stream player — wired to your CDN/HLS feed in the full build.", "")));
+  }
+
+  /* ===================================================================
+     SPORTS
+     =================================================================== */
+  const fixtures = [
+    { id: "f1", league: "Premier League", live: true, clock: "67'", a: ["Arsenal", "#c8102e", "AR"], b: ["Chelsea", "#034694", "CH"], score: [2, 1], odds: [1.72, 3.90, 4.50] },
+    { id: "f2", league: "NBA", live: true, clock: "Q3 04:12", a: ["Lakers", "#552583", "LA"], b: ["Celtics", "#007a33", "BO"], score: [78, 74], odds: [1.55, 0, 2.45] },
+    { id: "f3", league: "Champions League", live: false, clock: "20:45", a: ["Real Madrid", "#febe10", "RM"], b: ["Bayern", "#dc052d", "BY"], score: [null, null], odds: [2.10, 3.40, 3.20] },
+    { id: "f4", league: "IPL — T20", live: true, clock: "12.3 ov", a: ["Mumbai", "#004ba0", "MI"], b: ["Chennai", "#f9cd05", "CH"], score: [112, 0], odds: [1.44, 0, 2.75] },
+    { id: "f5", league: "La Liga", live: false, clock: "Sun 21:00", a: ["Barcelona", "#a50044", "BA"], b: ["Atlético", "#cb3524", "AT"], score: [null, null], odds: [1.85, 3.60, 4.10] },
+  ];
+  function renderSports() {
+    $("#matchList").innerHTML = fixtures.map(f => {
+      const mkts = ["1", "X", "2"];
+      const labels = [f.a[0], "Draw", f.b[0]];
+      return `<div class="card match" data-fx="${f.id}">
+        <div class="match-top">
+          <span class="match-league">${f.league}</span>
+          ${f.live ? `<span class="match-live"><span class="dot-live"></span>LIVE</span><span class="match-clock">${f.clock}</span>` : `<span class="match-clock">${f.clock}</span>`}
+        </div>
+        <div class="match-teams">
+          <div class="team"><span class="crest" style="background:${f.a[1]}">${f.a[2]}</span><span class="tname">${f.a[0]}</span></div>
+          ${f.score[0] !== null ? `<span class="match-score mono">${f.score[0]}–${f.score[1]}</span>` : `<span class="match-clock">vs</span>`}
+          <div class="team" style="justify-content:flex-end;text-align:right"><span class="tname">${f.b[0]}</span><span class="crest" style="background:${f.b[1]}">${f.b[2]}</span></div>
+        </div>
+        <div class="odds-row">
+          ${f.odds.map((o, i) => o ? `<button class="odds-btn" data-fx="${f.id}" data-sel="${mkts[i]}" data-label="${labels[i]}" data-odds="${o}"><small>${mkts[i]} · ${labels[i].slice(0,10)}</small><b class="mono oval">${o.toFixed(2)}</b><span class="drift"></span></button>` : `<button class="odds-btn" disabled style="opacity:.35"><small>—</small><b>—</b></button>`).join("")}
+        </div>
+      </div>`;
+    }).join("");
+    $$("#matchList .odds-btn:not([disabled])").forEach(b => b.addEventListener("click", () => addLeg(b)));
+    startOddsTicker();
+  }
+  function addLeg(btn) {
+    const key = btn.dataset.fx + ":" + btn.dataset.sel;
+    // one selection per fixture
+    state.slip = state.slip.filter(l => l.fx !== btn.dataset.fx || l.key === key);
+    const exists = state.slip.find(l => l.key === key);
+    if (exists) { state.slip = state.slip.filter(l => l.key !== key); }
+    else state.slip.push({ key, fx: btn.dataset.fx, sel: btn.dataset.sel, label: btn.dataset.label, odds: +btn.dataset.odds });
+    $$(".odds-btn").forEach(b => b.classList.toggle("picked", state.slip.some(l => l.key === b.dataset.fx + ":" + b.dataset.sel)));
+    renderSlip();
+  }
+  function renderSlip() {
+    $("#slipCount").textContent = state.slip.length;
+    const body = $("#slipBody");
+    if (!state.slip.length) { body.innerHTML = `<div class="slip-empty">Tap any odds to add a selection.<br>Combine legs for a parlay.</div>`; return; }
+    const combined = state.slip.reduce((a, l) => a * l.odds, 1);
+    body.innerHTML = state.slip.map(l => {
+      const fx = fixtures.find(f => f.id === l.fx);
+      return `<div class="slip-leg">
+        <div class="sl-top"><span style="color:var(--muted)">${fx.a[0]} v ${fx.b[0]}</span><button class="rm" data-rm="${l.key}">×</button></div>
+        <div class="sl-sel">${l.label} <span style="color:var(--muted);font-weight:400">to win</span></div>
+        <div class="sl-odds">${l.odds.toFixed(2)}</div>
+      </div>`;
+    }).join("") + `
+      <div class="slip-foot">
+        <div class="field" style="margin-bottom:10px"><label>Stake (GC)</label><div class="input-wrap"><input id="slipStake" class="mono" value="100"></div></div>
+        <div class="stat-row"><span>${state.slip.length > 1 ? 'Parlay odds' : 'Odds'}</span><b class="mono">${combined.toFixed(2)}×</b></div>
+        <div class="stat-row"><span>Potential payout</span><b class="mono" id="slipPay" style="color:var(--brass)">${fmt(100 * combined)}</b></div>
+        <button class="btn-bet" id="placeBet" style="margin-top:12px">Place ${state.slip.length > 1 ? 'Parlay' : 'Bet'}</button>
+      </div>`;
+    $$("[data-rm]").forEach(b => b.addEventListener("click", () => { state.slip = state.slip.filter(l => l.key !== b.dataset.rm); $$(".odds-btn").forEach(x => x.classList.toggle("picked", state.slip.some(l => l.key === x.dataset.fx + ":" + x.dataset.sel))); renderSlip(); }));
+    const stakeEl = $("#slipStake");
+    stakeEl.addEventListener("input", () => $("#slipPay").textContent = fmt((+stakeEl.value || 0) * combined));
+    $("#placeBet").addEventListener("click", () => {
+      const stake = +stakeEl.value || 0;
+      if (stake <= 0) return toast("Enter a stake", "loss");
+      if (stake > state.balance) return toast("Insufficient balance", "loss");
+      setBalance(state.balance - stake);
+      toast(`${state.slip.length > 1 ? 'Parlay' : 'Bet'} placed · ${fmt(stake * combined)} GC to win`, "win");
+      state.slip = []; $$(".odds-btn").forEach(b => b.classList.remove("picked")); renderSlip();
+    });
+  }
+  let oddsTimer;
+  function startOddsTicker() {
+    clearInterval(oddsTimer);
+    oddsTimer = setInterval(() => {
+      $$("#matchList .odds-btn:not([disabled])").forEach(b => {
+        if (Math.random() > 0.75) {
+          let o = +b.dataset.odds; const delta = (Math.random() - 0.5) * 0.12; const n = Math.max(1.05, +(o + delta).toFixed(2));
+          b.dataset.odds = n; $(".oval", b).textContent = n.toFixed(2);
+          const d = $(".drift", b); d.textContent = n > o ? "▲" : "▼"; d.className = "drift " + (n > o ? "up" : "down");
+          setTimeout(() => { if (d) d.textContent = ""; }, 1400);
+        }
+      });
+      if (state.slip.length) renderSlip();
+    }, 2600);
+  }
+
+  /* ===================================================================
+     AFFILIATE  (mirrors backend/src/affiliate/commission.js)
+     =================================================================== */
+  const TIERS = [0.08, 0.03, 0.01];
+  const network = {
+    id: "sa", name: "SuperAgent Ltd", role: "Master Agent", color: "#d4b876",
+    children: [{
+      id: "a1", name: "agent_smith", role: "Agent · T1", color: "#4ea8de",
+      children: [
+        { id: "p1", name: "lucky_luke", role: "Player", color: "#4ade80", ggr: 4200 },
+        { id: "p2", name: "high_roller", role: "Player", color: "#f8715a", ggr: 12600 },
+        { id: "p3", name: "night_owl", role: "Player", color: "#6f5bd1", ggr: 2100 },
+      ],
+    }, {
+      id: "a2", name: "vip_desk", role: "Agent · T1", color: "#4ea8de",
+      children: [
+        { id: "p4", name: "whale_88", role: "Player", color: "#d4b876", ggr: 31000 },
+        { id: "p5", name: "casual_kim", role: "Player", color: "#4ade80", ggr: 800 },
+      ],
+    }],
+  };
+  function computeLedger() {
+    // walk tree, attribute each player's GGR up the chain
+    const ledger = {};
+    function add(id, tier, amount) { ledger[id] = ledger[id] || { total: 0, byTier: {} }; ledger[id].total += amount; ledger[id].byTier[tier] = (ledger[id].byTier[tier] || 0) + amount; }
+    network.children.forEach(agent => {
+      agent.children.forEach(pl => {
+        add(agent.id, 1, pl.ggr * TIERS[0]);   // direct agent
+        add(network.id, 2, pl.ggr * TIERS[1]); // master
+      });
+    });
+    return ledger;
+  }
+  function renderAffiliate() {
+    const ledger = computeLedger();
+    let totalGGR = 0, totalPlayers = 0, totalCommission = 0;
+    network.children.forEach(a => a.children.forEach(p => { totalGGR += p.ggr; totalPlayers++; }));
+    Object.values(ledger).forEach(l => totalCommission += l.total);
+    $("#affStats").innerHTML = [
+      ["Network GGR", fmt(totalGGR) + " GC", "brass", spark([12, 18, 15, 22, 26, 24, 31])],
+      ["Active Players", totalPlayers, "", spark([2, 3, 3, 4, 4, 5, 5])],
+      ["Commission Paid", fmt(totalCommission) + " GC", "brass", spark([4, 6, 5, 8, 9, 11, 12])],
+      ["Sub-Agents", "2", "", spark([1, 1, 2, 2, 2, 2, 2])],
+    ].map(([l, v, cls, sp]) => `<div class="card stat-card"><div class="sc-label">${l}</div><div class="sc-val ${cls}">${v}</div><div class="sc-spark">${sp}</div></div>`).join("");
+
+    // tree
+    const box = $("#treeBox");
+    function node(n, depth, tier) {
+      const earn = ledger[n.id] ? ledger[n.id].total : (n.ggr ? n.ggr : 0);
+      const sub = n.role === "Player" ? `GGR ${fmt(n.ggr)}` : (ledger[n.id] ? `T${tier} commission` : "");
+      return `<div class="tnode">
+        <span class="tavatar" style="background:${n.color};color:#111">${n.name.slice(0, 2).toUpperCase()}</span>
+        <div><div class="tname">${n.name}</div><div class="trole">${n.role}</div></div>
+        <div class="tmeta"><div class="tearn">${n.role === 'Player' ? fmt(n.ggr) + ' GGR' : '+' + fmt(earn) + ' GC'}</div><div class="tsub">${sub}</div></div>
+      </div>` + (n.children ? `<div class="tline">${n.children.map(c => node(c, depth + 1, tier + 1)).join("")}</div>` : "");
+    }
+    box.innerHTML = node(network, 0, 1);
+
+    // ledger table
+    const rows = Object.entries(ledger).map(([id, l]) => {
+      const name = id === network.id ? "SuperAgent Ltd" : network.children.find(a => a.id === id).name;
+      return { id, name, ...l };
+    }).sort((a, b) => b.total - a.total);
+    $("#ledgerTable").innerHTML = `<thead><tr><th>Agent</th><th>Tier</th><th>Rate</th><th style="text-align:right">Commission</th></tr></thead><tbody>${rows.map(r => {
+      const tier = Object.keys(r.byTier)[0];
+      return `<tr><td>${r.name}</td><td><span class="tier-tag tier-${tier}">Tier ${tier}</span></td><td class="mono">${(TIERS[tier - 1] * 100).toFixed(0)}%</td><td class="mono" style="text-align:right;color:var(--brass)">+${fmt(r.total)}</td></tr>`;
+    }).join("")}</tbody>`;
+  }
+  function spark(data) {
+    const w = 120, h = 30, max = Math.max(...data), min = Math.min(...data);
+    const pts = data.map((d, i) => `${(i / (data.length - 1)) * w},${h - ((d - min) / (max - min || 1)) * (h - 6) - 3}`).join(" ");
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="var(--brass)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/><circle cx="${w}" cy="${h - ((data[data.length-1] - min) / (max - min || 1)) * (h - 6) - 3}" r="2.5" fill="var(--brass)"/></svg>`;
+  }
+
+  /* ===================================================================
+     ADMIN
+     =================================================================== */
+  const players = [
+    { name: "lucky_luke", nonce: 0 }, { name: "high_roller", nonce: 0 },
+    { name: "whale_88", nonce: 0 }, { name: "casual_kim", nonce: 0 },
+  ];
+  async function renderAdmin() {
+    // prefill verifier with the last real bet
+    if (state.lastBet) {
+      $("#vServer").value = state.lastBet.serverSeed; $("#vHash").value = state.lastBet.serverSeedHash;
+      $("#vClient").value = state.lastBet.clientSeed; $("#vNonce").value = state.lastBet.nonce; $("#vGame").value = state.lastBet.game;
+    } else {
+      $("#vServer").value = state.seed.serverSeed; $("#vHash").value = state.seed.serverSeedHash;
+      $("#vClient").value = state.seed.clientSeed; $("#vNonce").value = 0;
+    }
+    $("#adminStats").innerHTML = [
+      ["Total Bets Today", "48,201", "", spark([30, 34, 33, 40, 44, 42, 48])],
+      ["Provably-Fair", "100%", "brass", spark([100, 100, 100, 100, 100, 100, 100])],
+      ["House Edge (avg)", "1.4%", "", spark([1.3, 1.5, 1.4, 1.6, 1.4, 1.3, 1.4].map(x => x * 10))],
+      ["Verification Requests", "312", "", spark([12, 18, 20, 24, 28, 30, 31])],
+    ].map(([l, v, cls, sp]) => `<div class="card stat-card"><div class="sc-label">${l}</div><div class="sc-val ${cls}">${v}</div><div class="sc-spark">${sp}</div></div>`).join("");
+
+    $("#rngTable").innerHTML = `<thead><tr><th>Player</th><th>Committed Server-Seed Hash</th><th style="text-align:right">Nonce</th></tr></thead><tbody>${
+      [["lucky_luke (you)", state.seed.serverSeedHash, state.seed.nonce], ...players.slice(1).map(p => [p.name, randPreviewHash(p.name), p.nonce])]
+        .map(([n, h, nn]) => `<tr><td>${n}</td><td class="mono" style="color:var(--brass-dim)">${h.slice(0, 28)}…</td><td class="mono" style="text-align:right">${nn}</td></tr>`).join("")
+    }</tbody>`;
+
+    $("#verifyBtn").onclick = doVerify;
+  }
+  const hashCache = {};
+  function randPreviewHash(k) { if (!hashCache[k]) { const a = new Uint8Array(32); crypto.getRandomValues(a); hashCache[k] = [...a].map(b => b.toString(16).padStart(2, "0")).join(""); } return hashCache[k]; }
+
+  async function doVerify() {
+    const s = $("#vServer").value.trim(), hsh = $("#vHash").value.trim(), c = $("#vClient").value.trim(), n = +$("#vNonce").value, g = $("#vGame").value.trim();
+    const out = $("#verifyOut"); out.style.display = "block";
+    if (!s || !c) { out.className = "verify-out bad"; out.textContent = "Provide server seed and client seed."; return; }
+    const hashOk = (await sha256(s)) === hsh;
+    let outcome;
+    if (g === "crash") outcome = (await crashPoint(s, c, n)).toFixed(2) + "×";
+    else if (g === "mines") outcome = "mines at [" + (await minesLayout(s, c, n)).join(", ") + "]";
+    else outcome = (await diceRoll(s, c, n)).toFixed(2);
+    out.className = "verify-out " + (hashOk ? "ok" : "bad");
+    out.innerHTML = `${hashOk ? "✓ HASH VERIFIED" : "✗ HASH MISMATCH"} — sha256(serverSeed) ${hashOk ? "matches" : "does NOT match"} the committed hash.<br>Recomputed ${g} outcome for nonce ${n}: <b>${outcome}</b>`;
+  }
+
+  /* --------------------- toggles --------------------- */
+  document.addEventListener("click", e => {
+    const t = e.target.closest("[data-toggle]"); if (!t) return;
+    $(".switch", t).classList.toggle("on");
+  });
+
+  /* --------------------- boot --------------------- */
+  (async function boot() {
+    await initSeed();
+    setBalance(10000);
+    renderLive();
+    renderSports();
+    openGame("dice");
+    console.log("%cAURUM prototype","color:#d4b876;font-size:16px;font-weight:bold");
+    console.log("Provably-fair engine mirrors backend/src/provablyFair.js — HMAC-SHA256(serverSeed, clientSeed:nonce).");
+  })();
+})();
+</script>
+
+</body>
+</html>
